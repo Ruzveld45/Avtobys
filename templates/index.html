@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Маршрут школьного автобуса — Чишминский район</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; }
+        #map { height: 100vh; width: 100%; }
+        
+        .panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 18px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+            z-index: 1000;
+            width: 340px;
+            max-height: calc(100vh - 20px);
+            overflow-y: auto;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        
+        .panel h3 {
+            margin: 0 0 5px 0;
+            color: #1a5276;
+            font-size: 17px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .panel h4 {
+            margin: 12px 0 5px 0;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+        
+        .panel label {
+            display: block;
+            font-weight: 600;
+            color: #34495e;
+            margin: 8px 0 3px 0;
+            font-size: 12px;
+        }
+        
+        .panel select,
+        .panel input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            margin: 4px 0 10px 0;
+            border: 2px solid #dcdde1;
+            border-radius: 8px;
+            font-size: 13px;
+            background: #f8f9fa;
+            transition: border-color 0.3s;
+        }
+        
+        .panel select:focus,
+        .panel input:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 12px;
+            margin: 6px 0;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        .btn-primary:hover { background: #2980b9; transform: translateY(-1px); }
+        .btn-primary:disabled { background: #bdc3c7; cursor: not-allowed; transform: none; }
+        
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+        .btn-success:hover { background: #219a52; transform: translateY(-1px); }
+        .btn-success:disabled { background: #bdc3c7; cursor: not-allowed; transform: none; }
+        
+        .badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            margin: 3px;
+        }
+        
+        .badge-success { background: #d4efdf; color: #27ae60; }
+        .badge-warning { background: #fef9e7; color: #f39c12; }
+        .badge-info { background: #d6eaf8; color: #2980b9; }
+        .badge-danger { background: #fadbd8; color: #e74c3c; }
+        
+        .student-item {
+            padding: 6px 8px;
+            border-bottom: 1px solid #ecf0f1;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .student-item:hover { background: #f8f9fa; }
+        
+        .student-name { font-weight: 600; color: #2c3e50; }
+        .student-address { color: #7f8c8d; font-size: 11px; }
+        
+        .message-box {
+            padding: 10px;
+            border-radius: 8px;
+            margin: 8px 0;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .message-success { background: #d4efdf; border: 1px solid #27ae60; color: #1e8449; }
+        .message-warning { background: #fef9e7; border: 1px solid #f39c12; color: #7d6608; }
+        .message-error { background: #fadbd8; border: 1px solid #e74c3c; color: #922b21; }
+        
+        .settlement-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin: 5px 0;
+        }
+        
+        hr { border: none; border-top: 1px solid #ecf0f1; margin: 12px 0; }
+        
+        .legend {
+            font-size: 11px;
+            color: #7f8c8d;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 5px 0;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        @media (max-width: 400px) {
+            .panel { width: 95%; left: 2.5%; padding: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="panel" id="panel">
+        <h3>🚌 Маршрут автобуса</h3>
+        <div style="font-size:11px; color:#7f8c8d; margin-bottom:8px;">
+            Чишминский район • Республика Башкортостан
+        </div>
+        
+        <!-- Шаг 1: Загрузка файла -->
+        <label>📂 1. Загрузите Excel-файл</label>
+        <input type="file" id="excelFile" accept=".xlsx,.xls">
+        <button class="btn btn-primary" onclick="uploadFile()">
+            📥 Загрузить и геокодировать
+        </button>
+        
+        <div class="legend">
+            <span class="legend-item">
+                <span class="legend-dot" style="background:#3498db;"></span> Ученики
+            </span>
+            <span class="legend-item">
+                <span class="legend-dot" style="background:#27ae60;"></span> Школы
+            </span>
+            <span class="legend-item">
+                <span class="legend-dot" style="background:#e74c3c;"></span> Выбранная школа
+            </span>
+        </div>
+        
+        <!-- Информация о загрузке -->
+        <div id="messageArea"></div>
+        <div id="settlementTags" class="settlement-tags"></div>
+        
+        <hr>
+        
+        <!-- Шаг 2: Выбор школы -->
+        <label>🏫 2. Выберите школу</label>
+        <select id="schoolSelect">
+            <option value="">— сначала загрузите файл —</option>
+        </select>
+        <div id="schoolInfo" style="font-size:11px; color:#7f8c8d; margin-top:3px;"></div>
+        
+        <!-- Шаг 3: Построение маршрута -->
+        <button class="btn btn-success" id="optimizeBtn" disabled onclick="buildRoute()">
+            🗺️ Построить оптимальный маршрут
+        </button>
+        
+        <hr>
+        
+        <!-- Список учеников -->
+        <div id="studentList">
+            <h4>👨‍🎓 Список учеников</h4>
+            <p style="color:#95a5a6; font-size:12px;">Загрузите файл для отображения</p>
+        </div>
+        
+        <!-- Информация о маршруте -->
+        <div id="routeInfo"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    
+    <script>
+        // Инициализация карты — центр на Чишминский район
+        const map = L.map('map').setView([54.59, 55.39], 11);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Переменные состояния
+        let studentMarkers = [];
+        let schoolMarkers = [];
+        let schoolsData = [];
+        let studentsData = [];
+        let selectedSchool = null;
+        let routingControl = null;
+        let allSettlements = [];
+
+        // Сброс при выборе нового файла
+        document.getElementById('excelFile').addEventListener('change', function() {
+            document.getElementById('optimizeBtn').disabled = true;
+            document.getElementById('routeInfo').innerHTML = '';
+        });
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('excelFile');
+            const file = fileInput.files[0];
+            if (!file) { 
+                showMessage('Пожалуйста, выберите файл Excel', 'warning');
+                return; 
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            showMessage('⏳ Идёт геокодирование адресов... Это может занять 1-2 минуты для 10-15 адресов.', 'info');
+            document.getElementById('studentList').innerHTML = '<p style="color:#3498db;">⏳ Обработка...</p>';
+
+            try {
+                const resp = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await resp.json();
+                
+                if (data.error) { 
+                    showMessage('❌ Ошибка: ' + data.error, 'error');
+                    return; 
+                }
+
+                studentsData = data.students;
+                schoolsData = data.schools;
+                allSettlements = data.all_settlements || [];
+                
+                renderData(data);
+                
+                // Показываем сообщение
+                showMessage(data.message || `✅ Загружено ${studentsData.length} учеников`, 'success');
+                
+            } catch (err) {
+                showMessage('❌ Ошибка соединения: ' + err.message, 'error');
+            }
+        }
+
+        function renderData(data) {
+            // Очистка старых маркеров
+            studentMarkers.forEach(m => map.removeLayer(m));
+            schoolMarkers.forEach(m => map.removeLayer(m));
+            studentMarkers = [];
+            schoolMarkers = [];
+            selectedSchool = null;
+            document.getElementById('optimizeBtn').disabled = true;
+            
+            // Удаляем старый маршрут
+            if (routingControl) {
+                map.removeControl(routingControl);
+                routingControl = null;
+            }
+
+            // Теги населённых пунктов
+            const tagsDiv = document.getElementById('settlementTags');
+            if (data.all_settlements && data.all_settlements.length > 0) {
+                tagsDiv.innerHTML = data.all_settlements.slice(0, 8).map(s => 
+                    `<span class="badge badge-info">📍 ${s}</span>`
+                ).join('');
+            } else if (data.detected_city) {
+                tagsDiv.innerHTML = `<span class="badge badge-success">📍 ${data.detected_city}</span>`;
+            } else {
+                tagsDiv.innerHTML = '';
+            }
+
+            // Отрисовка учеников
+            const bounds = [];
+            
+            const studentIcon = L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+                shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+            });
+            
+            studentsData.forEach((s, idx) => {
+                const marker = L.marker([s.lat, s.lon], { icon: studentIcon })
+                    .bindPopup(`
+                        <b>${s.name || 'Ученик'}</b><br>
+                        📍 ${s.address}<br>
+                        ${s.phone ? '📞 ' + s.phone : ''}
+                    `);
+                marker.addTo(map);
+                studentMarkers.push(marker);
+                bounds.push([s.lat, s.lon]);
+            });
+
+            // Отрисовка школ
+            const schoolSelect = document.getElementById('schoolSelect');
+            const schoolInfo = document.getElementById('schoolInfo');
+            
+            if (schoolsData.length === 0) {
+                schoolSelect.innerHTML = '<option value="">— школы не найдены —</option>';
+                schoolInfo.innerHTML = '⚠️ Добавьте школы в файл app.py';
+                showMessage('⚠️ В базе нет школ для этого района. Добавьте координаты школ в SCHOOLS_BY_CITY.', 'warning');
+            } else {
+                schoolSelect.innerHTML = '<option value="">— выберите школу —</option>';
+                schoolInfo.innerHTML = `Найдено школ: ${schoolsData.length}`;
+                
+                const schoolIcon = L.icon({
+                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+                    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41]
+                });
+                
+                schoolsData.forEach((school, idx) => {
+                    const marker = L.marker([school.lat, school.lon], { icon: schoolIcon })
+                        .bindPopup(`<b>${school.name}</b><br>${school.address || ''}`);
+                    marker.addTo(map);
+                    marker.on('click', () => selectSchool(school, idx));
+                    schoolMarkers.push(marker);
+                    bounds.push([school.lat, school.lon]);
+
+                    const opt = document.createElement('option');
+                    opt.value = idx;
+                    opt.textContent = `${school.name} ${school.address ? '(' + school.address + ')' : ''}`;
+                    schoolSelect.appendChild(opt);
+                });
+
+                schoolSelect.onchange = function() {
+                    const idx = this.value;
+                    if (idx !== '') {
+                        selectSchool(schoolsData[idx], parseInt(idx));
+                    } else {
+                        deselectSchool();
+                    }
+                };
+            }
+
+            // Центрирование карты
+            if (bounds.length > 0) {
+                map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+            }
+
+            // Список учеников
+            const listDiv = document.getElementById('studentList');
+            if (studentsData.length > 0) {
+                listDiv.innerHTML = `<h4>👨‍🎓 Ученики (${studentsData.length})</h4>` + 
+                    studentsData.map((s, i) => `
+                        <div class="student-item">
+                            <span>
+                                <span class="student-name">${i+1}. ${s.name || 'Без имени'}</span><br>
+                                <span class="student-address">${s.address}</span>
+                            </span>
+                            ${s.phone ? `<span style="font-size:11px;">📞 ${s.phone}</span>` : ''}
+                        </div>
+                    `).join('');
+            }
+        }
+
+        function selectSchool(school, idx) {
+            deselectSchool();
+            selectedSchool = school;
+            
+            if (idx >= 0 && schoolMarkers[idx]) {
+                map.removeLayer(schoolMarkers[idx]);
+                const redIcon = L.icon({
+                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41]
+                });
+                const marker = L.marker([school.lat, school.lon], { icon: redIcon })
+                    .bindPopup(`<b>${school.name} ✅ Выбрана</b>`)
+                    .addTo(map);
+                schoolMarkers[idx] = marker;
+            }
+            
+            document.getElementById('optimizeBtn').disabled = false;
+            document.getElementById('routeInfo').innerHTML = 
+                `<div class="message-box message-success">✅ Выбрана: <b>${school.name}</b></div>`;
+        }
+
+        function deselectSchool() {
+            if (selectedSchool) {
+                const idx = schoolsData.indexOf(selectedSchool);
+                if (idx >= 0 && schoolMarkers[idx]) {
+                    map.removeLayer(schoolMarkers[idx]);
+                    const greenIcon = L.icon({
+                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+                        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34],
+                        shadowSize: [41, 41]
+                    });
+                    const marker = L.marker([selectedSchool.lat, selectedSchool.lon], { icon: greenIcon })
+                        .bindPopup(`<b>${selectedSchool.name}</b>`)
+                        .addTo(map);
+                    schoolMarkers[idx] = marker;
+                }
+                selectedSchool = null;
+                document.getElementById('optimizeBtn').disabled = true;
+                document.getElementById('routeInfo').innerHTML = '';
+            }
+        }
+
+        function showMessage(msg, type) {
+            const area = document.getElementById('messageArea');
+            const classes = {
+                'success': 'message-success',
+                'warning': 'message-warning',
+                'error': 'message-error',
+                'info': 'message-warning'
+            };
+            area.innerHTML = `<div class="message-box ${classes[type] || ''}">${msg}</div>`;
+            
+            // Автоочистка через 15 секунд (кроме ошибок)
+            if (type !== 'error') {
+                setTimeout(() => { area.innerHTML = ''; }, 15000);
+            }
+        }
+
+        async function buildRoute() {
+            if (!selectedSchool || studentsData.length === 0) return;
+
+            showMessage('⏳ Строим оптимальный маршрут через OSRM...', 'info');
+            document.getElementById('optimizeBtn').disabled = true;
+
+            const payload = {
+                school: { lat: selectedSchool.lat, lon: selectedSchool.lon },
+                students: studentsData.map(s => ({ lat: s.lat, lon: s.lon }))
+            };
+
+            try {
+                const resp = await fetch('/optimize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json();
+                
+                if (data.error) { 
+                    showMessage('❌ ' + data.error, 'error');
+                    document.getElementById('optimizeBtn').disabled = false;
+                    return; 
+                }
+
+                // Удаляем старый маршрут
+                if (routingControl) {
+                    map.removeControl(routingControl);
+                }
+
+                const waypoints = data.route.map(coord => L.latLng(coord[0], coord[1]));
+                routingControl = L.Routing.control({
+                    waypoints: waypoints,
+                    routeWhileDragging: false,
+                    router: L.Routing.osrmv1({
+                        serviceUrl: 'https://router.project-osrm.org/route/v1'
+                    }),
+                    lineOptions: {
+                        styles: [{ color: '#e74c3c', weight: 6, opacity: 0.8 }]
+                    },
+                    createMarker: function() { return null; },
+                    addWaypoints: false
+                }).addTo(map);
+
+                routingControl.on('routesfound', function(e) {
+                    const summary = e.routes[0].summary;
+                    document.getElementById('routeInfo').innerHTML = `
+                        <div class="message-box message-success">
+                            <b>📊 Статистика маршрута:</b><br>
+                            🚏 Остановок: <b>${data.stop_count}</b><br>
+                            📏 Длина: <b>${(summary.totalDistance/1000).toFixed(1)} км</b><br>
+                            ⏱ Время: <b>~${Math.round(summary.totalTime/60)} мин.</b><br>
+                            🔄 Возврат в школу: <b>да</b>
+                        </div>
+                    `;
+                    showMessage('✅ Маршрут построен!', 'success');
+                });
+
+                // Подгоняем карту под маршрут
+                const routeBounds = L.latLngBounds(waypoints);
+                map.fitBounds(routeBounds, { padding: [50, 50], maxZoom: 14 });
+                
+                document.getElementById('optimizeBtn').disabled = false;
+
+            } catch (err) {
+                showMessage('❌ Ошибка: ' + err.message, 'error');
+                document.getElementById('optimizeBtn').disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
